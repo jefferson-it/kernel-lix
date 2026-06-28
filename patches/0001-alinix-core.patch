@@ -1,0 +1,226 @@
+From: Alinix Team <kernel@alinix.dev>
+Date: Sat Jun 27 2026
+Subject: [PATCH 1/1] Alinix Root Limiter - restrição de root via chave
+
+Adiciona o sistema de autenticação Alinix:
+  - include/linux/alinix.h → header com funções de auth
+  - kernel/alinix.c       → implementação (mapa de UIDs autorizados)
+  - kernel/Makefile       → compila condicional (CONFIG_SECURITY_ALINIX)
+  - kernel/capability.c   → hook no cap_capable() para restringir root
+  - security/Kconfig      → entrada de config SECURITY_ALINIX
+
+O limitador:
+  - root (UID 0) sem autenticação NÃO pode: CAP_SYS_ADMIN, SYS_MODULE,
+    SYS_RAWIO, SYS_BOOT, SYS_TIME, NET_ADMIN, LINUX_IMMUTABLE
+  - módulo Rust externo (alinix-lsm) gerencia a chave via /proc/alinix/
+  - init (PID 1) é autorizado automaticamente ao ativar o limitador
+
+Signed-off-by: Alinix Team <kernel@alinix.dev>
+
+---
+ include/linux/alinix.h |  28 +++++++++++++
+ kernel/Makefile        |   3 +-
+ kernel/alinix.c        | 97 ++++++++++++++++++++++++++++++++++++++++++
+ kernel/capability.c    | 28 ++++++++++++
+ security/Kconfig       |  9 +++++
+ 5 files changed, 164 insertions(+), 1 deletion(-)
+ create mode 100644 include/linux/alinix.h
+ create mode 100644 kernel/alinix.c
+diff --git a/include/linux/alinix.h b/include/linux/alinix.h
+new file mode 100644
+index 000000000000..b87dda2c6b23
+--- /dev/null
++++ b/include/linux/alinix.h
+@@ -0,0 +1,27 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef _LINUX_ALINIX_H
++#define _LINUX_ALINIX_H
++
++#include <linux/types.h>
++#include <linux/uidgid.h>
++#include <linux/stddef.h>
++
++#ifdef CONFIG_SECURITY_ALINIX
++
++void alinix_enable(void);
++void alinix_disable(void);
++void alinix_set_uid_auth(uid_t uid, bool auth);
++bool alinix_uid_is_authed(uid_t uid);
++bool alinix_is_enabled(void);
++
++#else /* !CONFIG_SECURITY_ALINIX */
++
++static inline bool alinix_uid_is_authed(uid_t uid) { return true; }
++static inline bool alinix_is_enabled(void) { return false; }
++static inline void alinix_set_uid_auth(uid_t uid, bool auth) { }
++static inline void alinix_enable(void) { }
++static inline void alinix_disable(void) { }
++
++#endif /* CONFIG_SECURITY_ALINIX */
++
++#endif /* _LINUX_ALINIX_H */
+diff --git a/kernel/Makefile b/kernel/Makefile
+index 1c82b81290db..6e066a18f07e 100644
+--- a/kernel/Makefile
++++ b/kernel/Makefile
+@@ -11,7 +11,8 @@ obj-y     = fork.o exec_domain.o panic.o \
+ 	    extable.o params.o \
+ 	    kthread.o sys_ni.o nsproxy.o \
+ 	    notifier.o ksysfs.o cred.o \
+-	    reboot.o async.o range.o smpboot.o ucount.o
++	    reboot.o async.o range.o smpboot.o ucount.o
++obj-$(CONFIG_SECURITY_ALINIX) += alinix.o
+ 
+ obj-$(CONFIG_MODULES) += kmod.o
+ obj-$(CONFIG_MULTIUSER) += groups.o
+diff --git a/kernel/alinix.c b/kernel/alinix.c
+new file mode 100644
+index 000000000000..a1ac8ee40cde
+--- /dev/null
++++ b/kernel/alinix.c
+@@ -0,0 +1,79 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * kernel/alinix.c  —  Alinix Root Limiter
++ *
++ * Fornece o mecanismo de autenticação de root por chave no kernel.
++ * O módulo Rust externo (alinix-lsm) usa estas funções para gerenciar
++ * a autorização de UIDs via interface /proc/alinix/.
++ *
++ * A verificação de capability é feita em kernel/capability.c.
++ */
++#include <linux/alinix.h>
++#include <linux/sched.h>
++#include <linux/spinlock.h>
++#include <linux/export.h>
++#include <linux/printk.h>
++#include <linux/bitmap.h>
++
++#define ALINIX_MAX_AUTH_UID 65536
++
++/* Mapa de bits: UIDs cujo root é autorizado */
++static DECLARE_BITMAP(alinix_auth_bitmap, ALINIX_MAX_AUTH_UID);
++static DEFINE_SPINLOCK(alinix_auth_lock);
++static bool alinix_limiter_enabled;
++
++void alinix_enable(void)
++{
++	alinix_limiter_enabled = true;
++	/* Autoriza init (PID 1, UID 0) automaticamente */
++	alinix_set_uid_auth(0, true);
++	pr_info("Alinix: root limiter ativo — root requer autenticação\n");
++}
++EXPORT_SYMBOL_GPL(alinix_enable);
++
++void alinix_disable(void)
++{
++	alinix_limiter_enabled = false;
++	bitmap_zero(alinix_auth_bitmap, ALINIX_MAX_AUTH_UID);
++	pr_info("Alinix: root limiter desativado\n");
++}
++EXPORT_SYMBOL_GPL(alinix_disable);
++
++void alinix_set_uid_auth(uid_t uid, bool auth)
++{
++	unsigned long flags;
++
++	if ((uid_t)uid >= ALINIX_MAX_AUTH_UID)
++		return;
++
++	spin_lock_irqsave(&alinix_auth_lock, flags);
++	if (auth)
++		__set_bit(uid, alinix_auth_bitmap);
++	else
++		__clear_bit(uid, alinix_auth_bitmap);
++	spin_unlock_irqrestore(&alinix_auth_lock, flags);
++}
++EXPORT_SYMBOL_GPL(alinix_set_uid_auth);
++
++bool alinix_uid_is_authed(uid_t uid)
++{
++	bool ret;
++	unsigned long flags;
++
++	if (!alinix_limiter_enabled)
++		return true;
++	if ((uid_t)uid >= ALINIX_MAX_AUTH_UID)
++		return false;
++
++	spin_lock_irqsave(&alinix_auth_lock, flags);
++	ret = test_bit(uid, alinix_auth_bitmap);
++	spin_unlock_irqrestore(&alinix_auth_lock, flags);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(alinix_uid_is_authed);
++
++bool alinix_is_enabled(void)
++{
++	return alinix_limiter_enabled;
++}
++EXPORT_SYMBOL_GPL(alinix_is_enabled);
+diff --git a/kernel/capability.c b/kernel/capability.c
+index 1c157b2ef5f7..5b0a56ad1a55 100644
+--- a/kernel/capability.c
++++ b/kernel/capability.c
+@@ -11,6 +11,9 @@
+ #include <linux/cred.h>
+ #include <linux/export.h>
+ #include <linux/syscalls.h>
++#ifdef CONFIG_SECURITY_ALINIX
++#include <linux/alinix.h>
++#endif
+ #include <linux/user_namespace.h>
+ #include <linux/uaccess.h>
+ 
+@@ -269,6 +272,30 @@ int cap_capable(const struct cred *cred, struct user_namespace *targ_ns,
+ 		return 0;
+ 	}
+ 
++#ifdef CONFIG_SECURITY_ALINIX
++	/*
++	 * Alinix Root Limiter:
++	 *   root (UID 0) sem autenticação NÃO pode executar operações
++	 *   sensíveis. O módulo Rust alinix-lsm gerencia a chave.
++	 */
++	if (alinix_is_enabled()) {
++		uid_t uid = from_kuid(&init_user_ns, cred->uid);
++
++		if (uid == 0 && !alinix_uid_is_authed(uid)) {
++			switch (cap) {
++			case CAP_SYS_ADMIN:
++			case CAP_SYS_MODULE:
++			case CAP_SYS_RAWIO:
++			case CAP_SYS_BOOT:
++			case CAP_SYS_TIME:
++			case CAP_NET_ADMIN:
++			case CAP_LINUX_IMMUTABLE:
++				return -EPERM;
++			}
++		}
++	}
++#endif /* CONFIG_SECURITY_ALINIX */
++
+ 	/*
+ 	 * This is the first time the caller's permissive state is checked.
+ 	 * Any failure of the capability checks earlier in this function
+diff --git a/security/Kconfig b/security/Kconfig
+index 2c1b8513bcc1..7a20b602c086 100644
+--- a/security/Kconfig
++++ b/security/Kconfig
+@@ -306,6 +306,14 @@ endchoice
+ 
+ endmenu
+ 
++config SECURITY_ALINIX
++	bool "Alinix Root Limiter"
++	depends on SECURITY
++	help
++	  Alinix Root Limiter — restringe operações sensíveis do root
++	  (sysadmin, módulos, raw IO, boot, rede) até que uma chave de
++	  autenticação seja fornecida através do módulo Rust alinix-lsm.
++	  Diz N se não for usar.
++
+ source "security/integrity/Kconfig"
+ 
+-- 
+2.43.0

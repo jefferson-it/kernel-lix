@@ -1,0 +1,403 @@
+# Alinix Kernel Config Fragment (kernel 6.18.10)
+# Aplicar sobre make defconfig com merge_config.sh
+# Inclui suporte a Rust, LSM alinix, initramfs Rust (JSR-OS),
+# e otimizações para i5-12450H (Alder Lake)
+
+# ============================================================================
+# Arquitetura x86_64 puro (sem 32-bit)
+# ============================================================================
+CONFIG_64BIT=y
+CONFIG_X86_64=y
+CONFIG_X86_EXTENDED_PLATFORM=y
+CONFIG_X86_INTEL_LPSS=y
+CONFIG_NR_CPUS=12
+CONFIG_SCHED_MC=y
+CONFIG_SCHED_MC_PRIO=y
+CONFIG_SCHED_SMT=y
+CONFIG_X86_CPU_RESCTRL=y
+CONFIG_IA32_EMULATION=n
+CONFIG_IA32_AOUT=n
+CONFIG_X86_X32=n
+CONFIG_COMPAT_32=n
+CONFIG_COMPAT=n
+
+# ============================================================================
+# CPU idle / frequency (Intel Alder Lake P-State)
+# ============================================================================
+CONFIG_X86_INTEL_ALDERLAKE=y
+CONFIG_INTEL_PSTATE=y
+CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL=y
+CONFIG_CPU_FREQ_GOV_PERFORMANCE=y
+CONFIG_CPU_FREQ_GOV_POWERSAVE=y
+CONFIG_CPU_FREQ_GOV_USERSPACE=y
+CONFIG_CPU_FREQ_GOV_ONDEMAND=y
+CONFIG_CPU_FREQ_GOV_CONSERVATIVE=y
+CONFIG_X86_ACPI_CPUFREQ=y
+CONFIG_CPU_IDLE=y
+CONFIG_INTEL_IDLE=y
+
+# ============================================================================
+# Preempção desktop (baixa latência)
+# ============================================================================
+CONFIG_PREEMPT=y
+CONFIG_PREEMPT_VOLUNTARY=n
+CONFIG_PREEMPT_NONE=n
+CONFIG_HZ_1000=y
+CONFIG_HZ=1000
+CONFIG_SCHED_HRTICK=y
+
+# ============================================================================
+# Gerenciamento de memória
+# ============================================================================
+CONFIG_TRANSPARENT_HUGEPAGE=y
+CONFIG_TRANSPARENT_HUGEPAGE_MADVISE=y
+CONFIG_HUGETLB_PAGE=y
+CONFIG_HUGETLBFS=y
+CONFIG_NUMA=y
+CONFIG_NUMA_BALANCING=y
+CONFIG_NUMA_BALANCING_DEFAULT_ENABLED=y
+CONFIG_MIGRATION=y
+CONFIG_COMPACTION=y
+CONFIG_DEFAULT_MMAP_MIN_ADDR=65536
+CONFIG_ZSWAP=y
+CONFIG_ZSWAP_DEFAULT_ON=y
+CONFIG_Z3FOLD=y
+CONFIG_KSM=y
+CONFIG_MEMORY_FAILURE=y
+CONFIG_MEMORY_HOTPLUG=y
+
+# ============================================================================
+# Rust no kernel
+# ============================================================================
+CONFIG_RUST=y
+CONFIG_RUST_BUILD_ASSERT_ALLOW=y
+CONFIG_RUST_DEBUG_ASSERTIONS=n
+CONFIG_RUST_OVERFLOW_CHECKS=n
+
+# ============================================================================
+# Alinix Root Limiter via capaz (C patch + Rust module)
+# ============================================================================
+CONFIG_SECURITY_ALINIX=y
+
+# ============================================================================
+# Security (opcionais, mas recomendados)
+# ============================================================================
+CONFIG_SECURITY=y
+CONFIG_SECURITY_NETWORK=y
+CONFIG_SECURITY_PATH=y
+CONFIG_SECURITY_YAMA=y
+CONFIG_SECURITY_LOCKDOWN_LSM=y
+CONFIG_SECURITY_LOCKDOWN_LSM_EARLY=y
+CONFIG_SECURITY_APPARMOR=n
+CONFIG_SECURITY_SELINUX=n
+CONFIG_SECURITY_SMACK=n
+CONFIG_SECURITY_TOMOYO=n
+CONFIG_INTEGRITY=y
+CONFIG_DEFAULT_SECURITY=""
+CONFIG_LSM="lockdown,yama,integrity,bpf"
+
+# ============================================================================
+# Hardening
+# ============================================================================
+CONFIG_STACKPROTECTOR=y
+CONFIG_STACKPROTECTOR_STRONG=y
+CONFIG_SLAB_FREELIST_RANDOM=y
+CONFIG_SLAB_FREELIST_HARDENED=y
+CONFIG_RANDOMIZE_KSTACK_OFFSET=y
+CONFIG_RANDOMIZE_MEMORY=y
+CONFIG_RANDOMIZE_BASE=y
+CONFIG_PAGE_TABLE_ISOLATION=y
+CONFIG_CPU_UNRET_ENTRY=y
+CONFIG_CPU_IBPB_ENTRY=y
+CONFIG_CPU_IBRS_ENTRY=y
+CONFIG_MITIGATION_RETHUNK=y
+CONFIG_MITIGATION_SRSO=y
+CONFIG_MITIGATION_IBPB=y
+CONFIG_MITIGATION_RFDS=y
+
+# ============================================================================
+# BPF (essencial para desktop moderno)
+# ============================================================================
+CONFIG_BPF=y
+CONFIG_BPF_SYSCALL=y
+CONFIG_BPF_JIT=y
+CONFIG_BPF_JIT_ALWAYS_ON=y
+CONFIG_BPF_LSM=y
+CONFIG_CGROUP_BPF=y
+
+# ============================================================================
+# Filesystems (ext4 built-in, btrfs módulo)
+# ============================================================================
+CONFIG_EXT4_FS=y
+CONFIG_EXT4_USE_FOR_EXT2=y
+CONFIG_EXT4_FS_POSIX_ACL=y
+CONFIG_EXT4_FS_SECURITY=y
+CONFIG_BTRFS_FS=m
+CONFIG_BTRFS_FS_POSIX_ACL=y
+CONFIG_F2FS_FS=m
+CONFIG_VFAT_FS=y
+CONFIG_FUSE_FS=y
+CONFIG_OVERLAY_FS=y
+CONFIG_SQUASHFS=y
+CONFIG_SQUASHFS_XZ=y
+CONFIG_SQUASHFS_ZLIB=y
+CONFIG_ISO9660_FS=y
+CONFIG_TMPFS=y
+CONFIG_TMPFS_POSIX_ACL=y
+CONFIG_TMPFS_XATTR=y
+CONFIG_AUTOFS_FS=y
+CONFIG_CONFIGFS_FS=y
+CONFIG_DEBUG_FS=y
+CONFIG_SYSFS=y
+CONFIG_PROC_FS=y
+CONFIG_PROC_KCORE=n
+
+CONFIG_FS_POSIX_ACL=y
+CONFIG_EXPORTFS=y
+CONFIG_FILE_LOCKING=y
+CONFIG_DNOTIFY=y
+CONFIG_INOTIFY_USER=y
+CONFIG_FANOTIFY=y
+CONFIG_FANOTIFY_ACCESS_PERMISSIONS=y
+CONFIG_QUOTA=y
+
+# ============================================================================
+# GPU Intel Alder Lake (UHD Graphics GT1)
+# ============================================================================
+CONFIG_DRM=y
+CONFIG_DRM_SIMPLEDRM=y
+CONFIG_FB_EFI=y
+CONFIG_FB_VESA=y
+CONFIG_DRM_I915=y
+CONFIG_DRM_I915_PXP=y
+CONFIG_DRM_I915_FORCE_PROBE="*"
+CONFIG_DRM_FBDEV_EMULATION=y
+CONFIG_FB=y
+CONFIG_FB_CFB_FILLRECT=y
+CONFIG_FB_CFB_COPYAREA=y
+CONFIG_FB_CFB_IMAGEBLIT=y
+CONFIG_FB_SYS_FILLRECT=y
+CONFIG_FB_SYS_COPYAREA=y
+CONFIG_FB_SYS_IMAGEBLIT=y
+CONFIG_FB_SYS_FOPS=y
+CONFIG_FB_DEFERRED_IO=y
+CONFIG_FB_MODE_HELPERS=y
+CONFIG_FB_I915=n
+
+# ============================================================================
+# GPU VirtIO (QEMU/KVM/Boxes) — essencial para testar a ISO live
+# ============================================================================
+CONFIG_DRM_VIRTIO_GPU=y
+CONFIG_DRM_VIRTIO_GPU_KMS=y
+CONFIG_VIRTIO=y
+CONFIG_VIRTIO_PCI=y
+CONFIG_VIRTIO_PCI_LEGACY=y
+
+# ============================================================================
+# GPU VMware/VirtualBox (VMSVGA) — para testes no VirtualBox
+# ============================================================================
+CONFIG_DRM_VMWGFX=y
+CONFIG_DRM_VBOXVIDEO=m
+
+# ============================================================================
+# Áudio Intel HDA
+# ============================================================================
+CONFIG_SOUND=y
+CONFIG_SND=y
+CONFIG_SND_HDA_INTEL=y
+CONFIG_SND_HDA_HWDEP=y
+CONFIG_SND_HDA_RECONFIG=y
+CONFIG_SND_HDA_INPUT_BEEP=y
+CONFIG_SND_HDA_PATCH_LOADER=y
+CONFIG_SND_HDA_CODEC_REALTEK=y
+CONFIG_SND_HDA_CODEC_HDMI=y
+CONFIG_SND_SOC=y
+
+# ============================================================================
+# NVMe
+# ============================================================================
+CONFIG_NVME_CORE=y
+CONFIG_BLK_DEV_NVME=y
+CONFIG_NVME_MULTIPATH=y
+CONFIG_NVME_HWMON=y
+
+# ============================================================================
+# SATA AHCI
+# ============================================================================
+CONFIG_ATA=y
+CONFIG_SATA_AHCI=y
+
+# ============================================================================
+# WiFi MT7921 (MediaTek MT76)
+# ============================================================================
+CONFIG_WLAN=y
+CONFIG_WIRELESS=y
+CONFIG_CFG80211=m
+CONFIG_MAC80211=m
+CONFIG_MT76=m
+CONFIG_MT76_CORE=m
+CONFIG_MT76_USB=m
+CONFIG_MT7921E=m
+CONFIG_MT7921S=m
+CONFIG_MT7921U=m
+
+# ============================================================================
+# Ethernet RTL8111
+# ============================================================================
+CONFIG_NET_VENDOR_REALTEK=y
+CONFIG_R8169=y
+
+# ============================================================================
+# USB 3.2 xHCI
+# ============================================================================
+CONFIG_USB_SUPPORT=y
+CONFIG_USB=y
+CONFIG_USB_XHCI_HCD=y
+CONFIG_USB_EHCI_HCD=y
+CONFIG_USB_STORAGE=y
+CONFIG_USB_UAS=y
+
+# ============================================================================
+# Block / Device Tree
+# ============================================================================
+CONFIG_BLK_DEV_SD=y
+CONFIG_BLK_DEV_LOOP=y
+CONFIG_BLK_DEV_LOOP_MIN_COUNT=8
+CONFIG_BLK_DEV_SR=y
+CONFIG_BLK_DEV_DM=y
+CONFIG_DM_CRYPT=y
+CONFIG_DM_THIN_PROVISIONING=y
+CONFIG_DM_CACHE=y
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+
+# ============================================================================
+# Rede (desktop + firewall básico)
+# ============================================================================
+CONFIG_NETFILTER=y
+CONFIG_NETFILTER_ADVANCED=y
+CONFIG_NF_CONNTRACK=m
+CONFIG_NF_CONNTRACK_FTP=m
+CONFIG_NF_CONNTRACK_TFTP=m
+CONFIG_NETFILTER_XTABLES=m
+CONFIG_NETFILTER_XT_MATCH_STATE=m
+CONFIG_NETFILTER_XT_MATCH_CONNTRACK=m
+CONFIG_IP_NF_IPTABLES=m
+CONFIG_IP_NF_FILTER=m
+CONFIG_IP_NF_NAT=m
+CONFIG_IP_NF_TARGET_MASQUERADE=m
+CONFIG_IP6_NF_IPTABLES=m
+CONFIG_IP6_NF_FILTER=m
+CONFIG_IP6_NF_NAT=m
+CONFIG_BRIDGE=m
+CONFIG_NET_SCHED=y
+CONFIG_NET_SCH_FQ_CODEL=y
+CONFIG_NET_SCH_CAKE=y
+CONFIG_TCP_CONG_BBR=m
+CONFIG_TCP_CONG_BIC=m
+CONFIG_TCP_CONG_WESTWOOD=m
+CONFIG_TCP_CONG_ADVANCED=y
+CONFIG_DEFAULT_CUBIC=y
+CONFIG_DEFAULT_TCP_CONG="cubic"
+
+# ============================================================================
+# Namespaces / CGroups (containers)
+# ============================================================================
+CONFIG_NAMESPACES=y
+CONFIG_USER_NS=y
+CONFIG_PID_NS=y
+CONFIG_NET_NS=y
+CONFIG_IPC_NS=y
+CONFIG_CGROUPS=y
+CONFIG_CGROUP_CPUACCT=y
+CONFIG_CGROUP_SCHED=y
+CONFIG_CGROUP_FREEZER=y
+CONFIG_CGROUP_DEVICE=y
+CONFIG_CPUSETS=y
+CONFIG_MEMCG=y
+
+# ============================================================================
+# IO Scheduler
+# ============================================================================
+CONFIG_MQ_IOSCHED_KYBER=y
+CONFIG_MQ_IOSCHED_NONE=y
+CONFIG_BLK_CGROUP=y
+CONFIG_BLK_DEV_THROTTLING=y
+
+# ============================================================================
+# Power management
+# ============================================================================
+CONFIG_PM=y
+CONFIG_PM_SLEEP=y
+CONFIG_SUSPEND=y
+CONFIG_HIBERNATION=n
+CONFIG_PM_DEBUG=n
+
+# ============================================================================
+# Boot (initramfs / alinix-init + xbootscreen)
+# ==============================================================================
+CONFIG_BLK_DEV_INITRD=y
+CONFIG_INITRAMFS_SOURCE=""
+CONFIG_RD_GZIP=y
+CONFIG_RD_LZ4=y
+CONFIG_SWITCH_ROOT=y
+CONFIG_CMDLINE_BOOL=n
+
+# ============================================================================
+# PCI (VMD, ASPM)
+# ============================================================================
+CONFIG_PCI=y
+CONFIG_PCIEPORTBUS=y
+CONFIG_PCIEASPM=y
+CONFIG_PCIEASPM_DEFAULT=y
+CONFIG_PCI_MSI=y
+CONFIG_VMD=y
+
+# ============================================================================
+# Input
+# ============================================================================
+CONFIG_INPUT_EVDEV=y
+CONFIG_INPUT_MOUSEDEV=y
+CONFIG_INPUT_KEYBOARD=y
+CONFIG_KEYBOARD_ATKBD=y
+CONFIG_INPUT_MOUSE=y
+CONFIG_MOUSE_PS2=y
+CONFIG_MOUSE_PS2_VMMOUSE=y
+CONFIG_INPUT_MISC=y
+
+# ============================================================================
+# Virtual Console (TTY) — essencial para Ctrl+Alt+F{3-6}
+# ============================================================================
+CONFIG_VT=y
+CONFIG_VT_CONSOLE=y
+CONFIG_VT_HW_CONSOLE_BINDING=y
+CONFIG_HW_CONSOLE=y
+CONFIG_FRAMEBUFFER_CONSOLE=y
+
+# ============================================================================
+# Serial (console)
+# ============================================================================
+CONFIG_SERIAL_8250=y
+CONFIG_SERIAL_8250_CONSOLE=y
+CONFIG_EFI=y
+CONFIG_EFI_STUB=y
+CONFIG_EFI_MIXED=n
+
+# ============================================================================
+# Debug (desligado)
+# ============================================================================
+CONFIG_DEBUG_KERNEL=n
+CONFIG_DEBUG_INFO=n
+CONFIG_DEBUG_INFO_BTF=n
+CONFIG_MAGIC_SYSRQ=n
+CONFIG_SCHED_DEBUG=n
+CONFIG_DYNAMIC_DEBUG=n
+CONFIG_SECTION_MISMATCH_WARN_ONLY=y
+CONFIG_FRAME_WARN=2048
+
+# ============================================================================
+# Kallsyms desligado (otimização)
+# ============================================================================
+CONFIG_KALLSYMS=n
+CONFIG_KALLSYMS_ALL=n
+CONFIG_PRINTK_TIME=y

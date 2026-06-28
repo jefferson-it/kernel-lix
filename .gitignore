@@ -1,0 +1,32 @@
+# Linux Kernel source & download archives
+linux-*/
+linux-*.tar.xz
+
+# Generated images & build artifacts
+initramfs.img
+logs/
+
+# Kernel Module build artifacts
+*.ko
+*.mod
+*.mod.c
+*.mod.o
+*.o
+.*.cmd
+Module.symvers
+modules.order
+
+# Python / Cargo cache or build artifacts if any
+target/
+__pycache__/
+*.pyc
+
+# IDEs & System files
+.vscode/
+.idea/
+.DS_Store
+
+# Temporary & agent-specific files
+made.md
+.claude
+.claude/
