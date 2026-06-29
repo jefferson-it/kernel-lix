@@ -1,7 +1,7 @@
 # Alinix Kernel Config Fragment (kernel 6.18.10)
 # Aplicar sobre make defconfig com merge_config.sh
 # Inclui suporte a Rust, LSM alinix, initramfs Rust (JSR-OS),
-# e otimizações para i5-12450H (Alder Lake)
+# e otimizações para processadores AMD Zen (64-bit)
 
 # ============================================================================
 # Arquitetura x86_64 puro (sem 32-bit)
@@ -9,8 +9,9 @@
 CONFIG_64BIT=y
 CONFIG_X86_64=y
 CONFIG_X86_EXTENDED_PLATFORM=y
-CONFIG_X86_INTEL_LPSS=y
-CONFIG_NR_CPUS=12
+# CONFIG_X86_INTEL_LPSS is not set
+CONFIG_X86_AMD_PLATFORM_DEVICE=y
+CONFIG_NR_CPUS=64
 CONFIG_SCHED_MC=y
 CONFIG_SCHED_MC_PRIO=y
 CONFIG_SCHED_SMT=y
@@ -22,10 +23,12 @@ CONFIG_COMPAT_32=n
 CONFIG_COMPAT=n
 
 # ============================================================================
-# CPU idle / frequency (Intel Alder Lake P-State)
+# CPU idle / frequency (AMD Zen P-State)
 # ============================================================================
-CONFIG_X86_INTEL_ALDERLAKE=y
-CONFIG_INTEL_PSTATE=y
+# CONFIG_X86_INTEL_ALDERLAKE is not set
+# CONFIG_INTEL_PSTATE is not set
+CONFIG_X86_AMD_PSTATE=y
+CONFIG_X86_AMD_PSTATE_DEFAULT_MODE=3
 CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL=y
 CONFIG_CPU_FREQ_GOV_PERFORMANCE=y
 CONFIG_CPU_FREQ_GOV_POWERSAVE=y
@@ -34,7 +37,16 @@ CONFIG_CPU_FREQ_GOV_ONDEMAND=y
 CONFIG_CPU_FREQ_GOV_CONSERVATIVE=y
 CONFIG_X86_ACPI_CPUFREQ=y
 CONFIG_CPU_IDLE=y
-CONFIG_INTEL_IDLE=y
+# CONFIG_INTEL_IDLE is not set
+CONFIG_AMD_PMC=y
+CONFIG_AMD_HFI=y
+CONFIG_AMD_3D_VCACHE=y
+CONFIG_X86_AMD_FREQ_SENSITIVITY=y
+
+# AMD Virtualization, Secure Encryption and IOMMU
+CONFIG_AMD_MEM_ENCRYPT=y
+CONFIG_AMD_IOMMU=y
+CONFIG_AMD_IOMMU_V2=y
 
 # ============================================================================
 # Preempção desktop (baixa latência)
@@ -137,11 +149,11 @@ CONFIG_BTRFS_FS_POSIX_ACL=y
 CONFIG_F2FS_FS=m
 CONFIG_VFAT_FS=y
 CONFIG_FUSE_FS=y
-CONFIG_OVERLAY_FS=y
-CONFIG_SQUASHFS=y
+CONFIG_OVERLAY_FS=m
+CONFIG_SQUASHFS=m
 CONFIG_SQUASHFS_XZ=y
 CONFIG_SQUASHFS_ZLIB=y
-CONFIG_ISO9660_FS=y
+CONFIG_ISO9660_FS=m
 CONFIG_TMPFS=y
 CONFIG_TMPFS_POSIX_ACL=y
 CONFIG_TMPFS_XATTR=y
@@ -162,15 +174,18 @@ CONFIG_FANOTIFY_ACCESS_PERMISSIONS=y
 CONFIG_QUOTA=y
 
 # ============================================================================
-# GPU Intel Alder Lake (UHD Graphics GT1)
+# GPU AMD Radeon (amdgpu)
 # ============================================================================
 CONFIG_DRM=y
 CONFIG_DRM_SIMPLEDRM=y
 CONFIG_FB_EFI=y
 CONFIG_FB_VESA=y
-CONFIG_DRM_I915=y
-CONFIG_DRM_I915_PXP=y
-CONFIG_DRM_I915_FORCE_PROBE="*"
+# CONFIG_DRM_I915 is not set
+CONFIG_DRM_AMDGPU=y
+CONFIG_DRM_AMDGPU_SI=y
+CONFIG_DRM_AMDGPU_CIK=y
+CONFIG_DRM_AMDGPU_USERPTR=y
+CONFIG_DRM_AMD_DC=y
 CONFIG_DRM_FBDEV_EMULATION=y
 CONFIG_FB=y
 CONFIG_FB_CFB_FILLRECT=y
@@ -182,7 +197,19 @@ CONFIG_FB_SYS_IMAGEBLIT=y
 CONFIG_FB_SYS_FOPS=y
 CONFIG_FB_DEFERRED_IO=y
 CONFIG_FB_MODE_HELPERS=y
-CONFIG_FB_I915=n
+# CONFIG_FB_I915 is not set
+
+# ============================================================================
+# AMD Audio Coprocessor / Laptop sensors
+# ============================================================================
+CONFIG_SND_SOC_AMD_ACP=m
+CONFIG_SND_SOC_AMD_ACP3x=m
+CONFIG_SND_SOC_AMD_RENOIR=m
+CONFIG_SND_SOC_AMD_ACP5x=m
+CONFIG_SND_SOC_AMD_ACP6x=m
+CONFIG_SND_SOC_AMD_RPL_ACP6x=m
+CONFIG_SND_AMD_ACP_CONFIG=m
+CONFIG_AMD_SFH_HID=m
 
 # ============================================================================
 # GPU VirtIO (QEMU/KVM/Boxes) — essencial para testar a ISO live

@@ -6,7 +6,7 @@ Kernel Linux customizado para o Alinix — distribuição desktop x86_64 com Rus
 
 - **Linux 6.18.10** compilado com suporte nativo a Rust
 - **Alinix Root Limiter** — LSM + módulo Rust que restringe o root até uma chave ser fornecida
-- Otimizações para Intel Alder Lake (i5-12450H)
+- Otimizações para processadores AMD Zen (64-bit / Ryzen & EPYC)
 - Preempção desktop (`CONFIG_PREEMPT=y`, HZ=1000)
 - Hardening completo (KASLR, KPTI, stack protector, Spectre/Meltdown mitigations)
 - Integração com o initramfs Rust do JSR-OS (`alinix-init`)
