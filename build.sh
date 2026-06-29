@@ -20,17 +20,37 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 JSR_OS_DIR="$(cd "${ROOT_DIR}/../JSR-OS" 2>/dev/null && pwd || echo "")"
 
-KERNEL_VERSION="${KERNEL_VERSION:-6.18.10}"
-KERNEL_PATCHLEVEL="${KERNEL_VERSION%%.*}"
-KERNEL_URL="https://cdn.kernel.org/pub/linux/kernel/v${KERNEL_PATCHLEVEL}.x/linux-${KERNEL_VERSION}.tar.xz"
-KERNEL_SRC="${ROOT_DIR}/linux-${KERNEL_VERSION}"
-NPROC="$(nproc)"
-
+KERNEL_VERSION="${KERNEL_VERSION:-}"
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 info()  { echo -e "${GREEN}[INFO]${NC}  $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 error() { echo -e "${RED}[ERRO]${NC}  $*"; exit 1; }
 header() { echo -e "\n${CYAN}═══ $* ═══${NC}\n"; }
+
+select_kernel_version() {
+    local cmd="${1:-}"
+    if [[ -z "${KERNEL_VERSION}" ]]; then
+        if [[ "$cmd" =~ ^(build|rebuild|menuconfig|config|install|modules|rust-module|full)$ ]] && { [ -t 0 ] || [ -t 1 ]; }; then
+            echo -e "${CYAN}══ Seletor de Versão do Kernel Base ══${NC}"
+            echo -e "1) 6.18.10 (Versão atual)"
+            echo -e "2) 7.1.2 (Kernel 7.x)"
+            read -rp "$(echo -e "${YELLOW}Escolha a versão [1-2] (padrão: 1):${NC} ")" choice
+            case "$choice" in
+                2) KERNEL_VERSION="7.1.2" ;;
+                *) KERNEL_VERSION="6.18.10" ;;
+            esac
+        else
+            KERNEL_VERSION="6.18.10"
+        fi
+    fi
+
+    KERNEL_PATCHLEVEL="${KERNEL_VERSION%%.*}"
+    KERNEL_URL="https://cdn.kernel.org/pub/linux/kernel/v${KERNEL_PATCHLEVEL}.x/linux-${KERNEL_VERSION}.tar.xz"
+    KERNEL_SRC="${ROOT_DIR}/linux-${KERNEL_VERSION}"
+    NPROC="$(nproc)"
+}
+
+select_kernel_version "${1:-build}"
 
 prompt_confirm() {
     local msg="$1"
@@ -217,7 +237,11 @@ apply_patches() {
     header "Aplicando patches Alinix"
 
     cd "$KERNEL_SRC"
-    [[ -f ".alinix_patched" ]] && { info "Patches já aplicados."; cd "$ROOT_DIR"; return; }
+    # Invalida o cache de patches se a versão atual não tiver alinix_mark_key_defined
+    if [[ -f ".alinix_patched" ]] && grep -q "alinix_mark_key_defined" "kernel/alinix.c" 2>/dev/null; then
+        info "Patches já aplicados (versão atual)."; cd "$ROOT_DIR"; return
+    fi
+    [[ -f ".alinix_patched" ]] && rm -f ".alinix_patched"
 
     info "Aplicando correções Alinix via Python..."
     python3 - "$KERNEL_SRC" << 'PYEOF'
@@ -257,6 +281,19 @@ def create_file(rel, content, desc):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     write(path, content)
     print(f"  [FIX]  {rel}: criado ({desc})")
+    return True
+
+def overwrite_file(rel, content, check_str, desc):
+    """Sempre sobrescreve arquivos gerados por nós (não são do kernel upstream)."""
+    path = os.path.join(K, rel)
+    if os.path.exists(path):
+        existing = read(path)
+        if check_str in existing:
+            print(f"  [OK]   {rel} já está atualizado ({desc})")
+            return True
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    write(path, content)
+    print(f"  [FIX]  {rel}: escrito/atualizado ({desc})")
     return True
 
 ok = True
@@ -311,7 +348,7 @@ if os.path.exists(_lib_rs):
             ok = False
 
 # ── 2. include/linux/alinix.h — header do Alinix Root Limiter ────────────────
-create_file("include/linux/alinix.h", """\
+overwrite_file("include/linux/alinix.h", """\
 /* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef _LINUX_ALINIX_H
 #define _LINUX_ALINIX_H
@@ -327,11 +364,15 @@ void alinix_disable(void);
 void alinix_set_uid_auth(uid_t uid, bool auth);
 bool alinix_uid_is_authed(uid_t uid);
 bool alinix_is_enabled(void);
+bool alinix_key_is_defined(void);
+void alinix_mark_key_defined(void);
 
 #else /* !CONFIG_SECURITY_ALINIX */
 
 static inline bool alinix_uid_is_authed(uid_t uid) { return true; }
 static inline bool alinix_is_enabled(void) { return false; }
+static inline bool alinix_key_is_defined(void) { return false; }
+static inline void alinix_mark_key_defined(void) { }
 static inline void alinix_set_uid_auth(uid_t uid, bool auth) { }
 static inline void alinix_enable(void) { }
 static inline void alinix_disable(void) { }
@@ -339,19 +380,21 @@ static inline void alinix_disable(void) { }
 #endif /* CONFIG_SECURITY_ALINIX */
 
 #endif /* _LINUX_ALINIX_H */
-""", "Alinix header")
+""", "alinix_mark_key_defined", "Alinix header")
 
 # ── 3. kernel/alinix.c — implementação do Root Limiter ───────────────────────
-create_file("kernel/alinix.c", """\
+overwrite_file("kernel/alinix.c", """\
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * kernel/alinix.c  -  Alinix Root Limiter
  *
  * Fornece o mecanismo de autenticacao de root por chave no kernel.
  * O modulo Rust externo (alinix-lsm) usa estas funcoes para gerenciar
- * a autorizacao de UIDs via interface /proc/alinix/.
+ * a autorizacao de UIDs via /dev/alinix-auth.
  *
  * A verificacao de capability e feita em security/commoncap.c.
+ * O limiter so entra em vigor apos uma chave ser definida via set_key.
+ * Antes disso, uid=0 tem acesso irrestrito (comportamento padrao do Linux).
  */
 #include <linux/alinix.h>
 #include <linux/sched.h>
@@ -366,12 +409,11 @@ create_file("kernel/alinix.c", """\
 static DECLARE_BITMAP(alinix_auth_bitmap, ALINIX_MAX_AUTH_UID);
 static DEFINE_SPINLOCK(alinix_auth_lock);
 static bool alinix_limiter_enabled;
+static bool alinix_key_defined;
 
 void alinix_enable(void)
 {
 \talinix_limiter_enabled = true;
-\t/* Autoriza init (PID 1, UID 0) automaticamente */
-\talinix_set_uid_auth(0, true);
 \tpr_info("Alinix: root limiter ativo\\n");
 }
 EXPORT_SYMBOL_GPL(alinix_enable);
@@ -379,6 +421,7 @@ EXPORT_SYMBOL_GPL(alinix_enable);
 void alinix_disable(void)
 {
 \talinix_limiter_enabled = false;
+\talinix_key_defined = false;
 \tbitmap_zero(alinix_auth_bitmap, ALINIX_MAX_AUTH_UID);
 \tpr_info("Alinix: root limiter desativado\\n");
 }
@@ -400,12 +443,24 @@ void alinix_set_uid_auth(uid_t uid, bool auth)
 }
 EXPORT_SYMBOL_GPL(alinix_set_uid_auth);
 
+void alinix_mark_key_defined(void)
+{
+\talinix_key_defined = true;
+}
+EXPORT_SYMBOL_GPL(alinix_mark_key_defined);
+
+bool alinix_key_is_defined(void)
+{
+\treturn alinix_key_defined;
+}
+EXPORT_SYMBOL_GPL(alinix_key_is_defined);
+
 bool alinix_uid_is_authed(uid_t uid)
 {
 \tbool ret;
 \tunsigned long flags;
 
-\tif (!alinix_limiter_enabled)
+\tif (!alinix_limiter_enabled || !alinix_key_defined)
 \t\treturn true;
 \tif ((uid_t)uid >= ALINIX_MAX_AUTH_UID)
 \t\treturn false;
@@ -422,7 +477,7 @@ bool alinix_is_enabled(void)
 \treturn alinix_limiter_enabled;
 }
 EXPORT_SYMBOL_GPL(alinix_is_enabled);
-""", "Alinix Root Limiter implementation")
+""", "alinix_mark_key_defined", "Alinix Root Limiter implementation")
 
 # ── 4. kernel/Makefile — adiciona alinix.o ───────────────────────────────────
 ok &= patch_file(
@@ -448,10 +503,12 @@ ok &= patch_file(
     """\
 #ifdef CONFIG_SECURITY_ALINIX
 \t/*
-\t * Alinix Root Limiter: root (UID 0) sem autenticacao nao pode
-\t * executar operacoes sensiveis. O modulo Rust alinix-lsm gerencia a chave.
+\t * Alinix Root Limiter: so entra em vigor depois que uma chave for definida
+\t * via `echo set_key <hex> > /dev/alinix-auth`. Antes disso, uid=0 tem
+\t * acesso irrestrito (comportamento padrao do Linux), evitando tela preta
+\t * no boot quando o servidor grafico ainda nao autenticou.
 \t */
-\tif (ret == 0 && alinix_is_enabled()) {
+\tif (ret == 0 && alinix_is_enabled() && alinix_key_is_defined()) {
 \t\tuid_t uid = from_kuid(&init_user_ns, cred->uid);
 \t\tif (uid == 0 && !alinix_uid_is_authed(uid)) {
 \t\t\tswitch (cap) {
@@ -511,37 +568,60 @@ configure_kernel() {
     # Se já configurado, só olddefconfig
     if [[ -f .config ]]; then
         run_logged "make olddefconfig" make olddefconfig
-        cd "$ROOT_DIR"; return
-    fi
+    else
+        # Gera config base
+        run_logged "make defconfig" make defconfig
 
-    # Gera config base
-    run_logged "make defconfig" make defconfig
-
-    # Aplica fragmento Alinix
-    local frag="${ROOT_DIR}/kernel.config.fragment"
-    if [[ -f "$frag" ]]; then
-        info "Aplicando otimizações Alinix (Rust + H/W + LSM)..."
-        # Merge via script oficial
-        if "${KERNEL_SRC}/scripts/kconfig/merge_config.sh" -n .config "$frag" 2>/dev/null; then
-            : # ok
-        else
-            warn "merge_config.sh falhou, aplicando via scripts/config..."
-            while IFS='=' read -r key val; do
-                [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
-                key="${key%% #*}"
-                nkey="${key#CONFIG_}"
-                case "$val" in
-                    y) ./scripts/config --enable "$nkey" 2>/dev/null || true ;;
-                    m) ./scripts/config --module "$nkey" 2>/dev/null || true ;;
-                    n) ./scripts/config --disable "$nkey" 2>/dev/null || true ;;
-                    *) ;;
-                esac
-            done < <(grep -v '^#' "$frag" | grep '=')
+        # Aplica fragmento Alinix
+        local frag="${ROOT_DIR}/kernel.config.fragment"
+        if [[ -f "$frag" ]]; then
+            info "Aplicando otimizações Alinix (Rust + H/W + LSM)..."
+            # Merge via script oficial
+            if "${KERNEL_SRC}/scripts/kconfig/merge_config.sh" -n .config "$frag" 2>/dev/null; then
+                : # ok
+            else
+                warn "merge_config.sh falhou, aplicando via scripts/config..."
+                while IFS='=' read -r key val; do
+                    [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
+                    key="${key%% #*}"
+                    nkey="${key#CONFIG_}"
+                    case "$val" in
+                        y) ./scripts/config --enable "$nkey" 2>/dev/null || true ;;
+                        m) ./scripts/config --module "$nkey" 2>/dev/null || true ;;
+                        n) ./scripts/config --disable "$nkey" 2>/dev/null || true ;;
+                        *) ;;
+                    esac
+                done < <(grep -v '^#' "$frag" | grep '=')
+            fi
         fi
+
+        run_logged "make olddefconfig" make olddefconfig
     fi
 
-    run_logged "make olddefconfig" make olddefconfig
-    info "Configuração salva em ${KERNEL_SRC}/.config"
+    # Validação obrigatória da configuração do Kernel
+    info "Validando configurações críticas no .config..."
+    local config_errors=()
+
+    if ! grep -q '^CONFIG_RUST=y' .config; then
+        config_errors+=("CONFIG_RUST=y (Suporte Rust no Kernel desabilitado)")
+    fi
+    if ! grep -q '^CONFIG_SECURITY_ALINIX=y' .config; then
+        config_errors+=("CONFIG_SECURITY_ALINIX=y (LSM Alinix desabilitado)")
+    fi
+    if ! grep -q '^CONFIG_MODULES=y' .config; then
+        config_errors+=("CONFIG_MODULES=y (Suporte a módulos desabilitado)")
+    fi
+
+    if [[ ${#config_errors[@]} -gt 0 ]]; then
+        echo -e "${RED}[ERRO] Validação da configuração do kernel falhou!${NC}"
+        echo -e "${YELLOW}As seguintes opções obrigatórias não estão habilitadas no .config:${NC}"
+        for err in "${config_errors[@]}"; do
+            echo -e "  - ${RED}${err}${NC}"
+        done
+        error "A compilação seria abortada mais tarde. Verifique kernel.config.fragment e conflitos de dependências Kconfig."
+    fi
+
+    info "Configuração salva e validada com sucesso em ${KERNEL_SRC}/.config"
     cd "$ROOT_DIR"
 }
 
@@ -594,6 +674,53 @@ build_rust_module() {
     info "Compilando módulo alinix-lsm..."
     run_logged "make alinix-lsm" make KERNEL_DIR="${KERNEL_SRC}"
     info "Módulo Rust compilado: $(ls -la *.ko 2>/dev/null || echo 'sem .ko gerado')"
+    cd "$ROOT_DIR"
+}
+
+# ============================================================================
+# 6.5  Publicar artefatos em dist/ (vmlinuz + initrd com sufixo -lix)
+# ============================================================================
+publish_dist() {
+    header "Publicando artefatos em dist/"
+
+    local bz="${KERNEL_SRC}/arch/x86/boot/bzImage"
+    if [[ ! -f "$bz" ]]; then
+        warn "bzImage não encontrado — pulando publicação em dist/"
+        return
+    fi
+
+    local kver
+    kver=$(make -s -C "$KERNEL_SRC" kernelrelease 2>/dev/null || echo "${KERNEL_VERSION}-lix")
+
+    local dist="${ROOT_DIR}/dist"
+    mkdir -p "$dist"
+
+    cp -v "$bz" "${dist}/vmlinuz-${kver}"
+    info "Kernel publicado: dist/vmlinuz-${kver}"
+
+    # initramfs: preferir o Rust (JSR-OS) se existir, senão gerar com mkinitramfs/dracut
+    if [[ -f "${ROOT_DIR}/initramfs.img" ]]; then
+        cp -v "${ROOT_DIR}/initramfs.img" "${dist}/initrd-${kver}.img"
+        info "initrd publicado (Rust): dist/initrd-${kver}.img"
+    elif command -v mkinitramfs &>/dev/null; then
+        mkinitramfs -o "${dist}/initrd-${kver}.img" "$kver" 2>/dev/null || true
+        [[ -f "${dist}/initrd-${kver}.img" ]] && \
+            info "initrd publicado (mkinitramfs): dist/initrd-${kver}.img" || \
+            warn "mkinitramfs falhou — dist/initrd-${kver}.img não gerado"
+    elif command -v dracut &>/dev/null; then
+        dracut --force "${dist}/initrd-${kver}.img" "$kver" 2>/dev/null || true
+        [[ -f "${dist}/initrd-${kver}.img" ]] && \
+            info "initrd publicado (dracut): dist/initrd-${kver}.img" || \
+            warn "dracut falhou — dist/initrd-${kver}.img não gerado"
+    else
+        warn "Nenhuma ferramenta de initramfs disponível — dist/initrd-${kver}.img não gerado"
+    fi
+
+    # System.map e config (úteis para debug)
+    [[ -f "${KERNEL_SRC}/System.map" ]] && cp -v "${KERNEL_SRC}/System.map" "${dist}/System.map-${kver}"
+    [[ -f "${KERNEL_SRC}/.config"    ]] && cp -v "${KERNEL_SRC}/.config"    "${dist}/config-${kver}"
+
+    info "dist/ atualizado: $(ls -lh "$dist" | tail -n +2 | awk '{print $NF}' | tr '\n' '  ')"
     cd "$ROOT_DIR"
 }
 
@@ -727,18 +854,19 @@ main() {
             configure_kernel
             build_kernel
             build_rust_module
+            publish_dist
             ;;
         rebuild)
             check_deps
-            if prompt_confirm "Deseja limpar os arquivos da compilação anterior (make clean)?" "n"; then
-                info "Limpando compilação anterior..."
-                cd "$KERNEL_SRC"
-                make clean
-                cd "$ROOT_DIR"
-            fi
-
             if [[ ! -d "$KERNEL_SRC" ]]; then
-                if prompt_confirm "Código fonte do kernel não encontrado. Deseja baixar/extrair?" "y"; then
+                local tarball="${ROOT_DIR}/linux-${KERNEL_VERSION}.tar.xz"
+                if [[ -f "$tarball" ]]; then
+                    info "Extraindo ${tarball}..."
+                    tar -xf "$tarball" -C "$ROOT_DIR"
+                    info "Extraído em ${KERNEL_SRC}"
+                    apply_patches
+                    configure_kernel
+                elif prompt_confirm "Código fonte do kernel não encontrado. Deseja baixar/extrair?" "y"; then
                     fetch_kernel
                     apply_patches
                     configure_kernel
@@ -751,11 +879,17 @@ main() {
                     fetch_kernel
                     apply_patches
                     configure_kernel
+                elif prompt_confirm "Deseja limpar os arquivos da compilação anterior (make clean)?" "n"; then
+                    info "Limpando compilação anterior..."
+                    cd "$KERNEL_SRC"
+                    make clean
+                    cd "$ROOT_DIR"
                 fi
             fi
 
             build_kernel
             build_rust_module
+            publish_dist
             ;;
         menuconfig|config)
             check_deps
@@ -776,6 +910,7 @@ main() {
             configure_kernel
             build_kernel
             build_rust_module
+            publish_dist
             ;;
         rust-module)
             check_deps
@@ -798,6 +933,7 @@ main() {
             build_kernel
             build_rust_module
             build_initramfs || true
+            publish_dist
             install_kernel
             setup_fhs
             ;;

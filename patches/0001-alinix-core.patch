@@ -106,9 +106,7 @@ index 000000000000..a1ac8ee40cde
 +void alinix_enable(void)
 +{
 +	alinix_limiter_enabled = true;
-+	/* Autoriza init (PID 1, UID 0) automaticamente */
-+	alinix_set_uid_auth(0, true);
-+	pr_info("Alinix: root limiter ativo — root requer autenticação\n");
++	pr_info("Alinix: root limiter ativo — root em TTY requer autenticação\n");
 +}
 +EXPORT_SYMBOL_GPL(alinix_enable);
 +
@@ -168,6 +166,7 @@ index 1c157b2ef5f7..5b0a56ad1a55 100644
  #include <linux/syscalls.h>
 +#ifdef CONFIG_SECURITY_ALINIX
 +#include <linux/alinix.h>
++#include <linux/sched/signal.h>
 +#endif
  #include <linux/user_namespace.h>
  #include <linux/uaccess.h>
@@ -180,12 +179,14 @@ index 1c157b2ef5f7..5b0a56ad1a55 100644
 +	/*
 +	 * Alinix Root Limiter:
 +	 *   root (UID 0) sem autenticação NÃO pode executar operações
-+	 *   sensíveis. O módulo Rust alinix-lsm gerencia a chave.
++	 *   sensíveis em sessões interativas (com TTY).
++	 *   Daemons do sistema (sem TTY) ficam livres para operar normalmente.
 +	 */
 +	if (alinix_is_enabled()) {
 +		uid_t uid = from_kuid(&init_user_ns, cred->uid);
 +
-+		if (uid == 0 && !alinix_uid_is_authed(uid)) {
++		if (uid == 0 && !alinix_uid_is_authed(uid) &&
++		    current->signal->tty != NULL) {
 +			switch (cap) {
 +			case CAP_SYS_ADMIN:
 +			case CAP_SYS_MODULE:

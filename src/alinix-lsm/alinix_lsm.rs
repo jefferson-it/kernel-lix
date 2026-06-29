@@ -33,6 +33,7 @@ extern "C" {
     fn alinix_set_uid_auth(uid: c_uint, auth: bool);
     fn alinix_uid_is_authed(uid: c_uint) -> bool;
     fn alinix_is_enabled() -> bool;
+    fn alinix_mark_key_defined();
 
     // kernel crypto API
     fn crypto_alloc_shash(name: *const c_char, type_: u32, mask: u32) -> *mut c_void;
@@ -133,9 +134,13 @@ fn do_set_key(arg: &[u8]) -> Result<()> {
     }
     st.root_key_hash = h;
     st.key_defined = true;
+    drop(st);
 
-    unsafe { alinix_enable() }
-    pr_info!("[Alinix] Chave definida — limitador ativo\n");
+    unsafe {
+        alinix_enable();
+        alinix_mark_key_defined();
+    }
+    pr_info!("[Alinix] Chave definida — limitador ativo, uid=0 requer auth\n");
     Ok(())
 }
 
