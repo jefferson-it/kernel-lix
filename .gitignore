@@ -1,12 +1,12 @@
-# Linux Kernel source & download archives
+# ── Código-fonte e tarballs do kernel ────────────────────────────────────────
 linux-*/
 linux-*.tar.xz
 
-# Generated images & build artifacts
+# ── Artefatos de build do kernel ─────────────────────────────────────────────
 initramfs.img
 logs/
 
-# Kernel Module build artifacts
+# ── Artefatos do módulo Rust (alinix-lsm) ────────────────────────────────────
 *.ko
 *.mod
 *.mod.c
@@ -16,17 +16,19 @@ logs/
 Module.symvers
 modules.order
 
-# Python / Cargo cache or build artifacts if any
+# ── dist/ — artefatos publicados (binários grandes, não versionados) ──────────
+dist/
+
+# ── Python / Cargo ────────────────────────────────────────────────────────────
 target/
 __pycache__/
 *.pyc
 
-# IDEs & System files
+# ── IDEs e sistema ────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 .DS_Store
 
-# Temporary & agent-specific files
+# ── Temporários e arquivos de agente ─────────────────────────────────────────
 made.md
-.claude
 .claude/

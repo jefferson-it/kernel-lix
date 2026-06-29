@@ -1,7 +1,13 @@
-# Alinix Kernel Config Fragment (kernel 6.18.10)
+# Alinix Kernel Config Fragment
 # Aplicar sobre make defconfig com merge_config.sh
 # Inclui suporte a Rust, LSM alinix, initramfs Rust (JSR-OS),
-# e otimizações para i5-12450H (Alder Lake)
+# otimizado para desktops/laptops Intel x86_64 (qualquer geração)
+
+# ============================================================================
+# Versão — uname -r retorna "<versão>-lix"
+# ============================================================================
+CONFIG_LOCALVERSION="-lix"
+CONFIG_LOCALVERSION_AUTO=n
 
 # ============================================================================
 # Arquitetura x86_64 puro (sem 32-bit)
@@ -10,21 +16,19 @@ CONFIG_64BIT=y
 CONFIG_X86_64=y
 CONFIG_X86_EXTENDED_PLATFORM=y
 CONFIG_X86_INTEL_LPSS=y
-CONFIG_NR_CPUS=12
+CONFIG_NR_CPUS=512
 CONFIG_SCHED_MC=y
 CONFIG_SCHED_MC_PRIO=y
 CONFIG_SCHED_SMT=y
 CONFIG_X86_CPU_RESCTRL=y
-CONFIG_IA32_EMULATION=n
+CONFIG_IA32_EMULATION=y
 CONFIG_IA32_AOUT=n
 CONFIG_X86_X32=n
 CONFIG_COMPAT_32=n
-CONFIG_COMPAT=n
 
 # ============================================================================
-# CPU idle / frequency (Intel Alder Lake P-State)
+# CPU idle / frequency (Intel genérico — cobre todas as gerações)
 # ============================================================================
-CONFIG_X86_INTEL_ALDERLAKE=y
 CONFIG_INTEL_PSTATE=y
 CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL=y
 CONFIG_CPU_FREQ_GOV_PERFORMANCE=y
@@ -53,9 +57,7 @@ CONFIG_TRANSPARENT_HUGEPAGE=y
 CONFIG_TRANSPARENT_HUGEPAGE_MADVISE=y
 CONFIG_HUGETLB_PAGE=y
 CONFIG_HUGETLBFS=y
-CONFIG_NUMA=y
-CONFIG_NUMA_BALANCING=y
-CONFIG_NUMA_BALANCING_DEFAULT_ENABLED=y
+CONFIG_NUMA=n
 CONFIG_MIGRATION=y
 CONFIG_COMPACTION=y
 CONFIG_DEFAULT_MMAP_MIN_ADDR=65536
@@ -94,7 +96,7 @@ CONFIG_SECURITY_SMACK=n
 CONFIG_SECURITY_TOMOYO=n
 CONFIG_INTEGRITY=y
 CONFIG_DEFAULT_SECURITY=""
-CONFIG_LSM="lockdown,yama,integrity,bpf"
+CONFIG_LSM="lockdown,yama,integrity,alinix,bpf"
 
 # ============================================================================
 # Hardening
@@ -107,9 +109,9 @@ CONFIG_RANDOMIZE_KSTACK_OFFSET=y
 CONFIG_RANDOMIZE_MEMORY=y
 CONFIG_RANDOMIZE_BASE=y
 CONFIG_PAGE_TABLE_ISOLATION=y
-CONFIG_CPU_UNRET_ENTRY=y
-CONFIG_CPU_IBPB_ENTRY=y
-CONFIG_CPU_IBRS_ENTRY=y
+CONFIG_MITIGATION_UNRET_ENTRY=y
+CONFIG_MITIGATION_IBPB_ENTRY=y
+CONFIG_MITIGATION_IBRS_ENTRY=y
 CONFIG_MITIGATION_RETHUNK=y
 CONFIG_MITIGATION_SRSO=y
 CONFIG_MITIGATION_IBPB=y
@@ -137,7 +139,7 @@ CONFIG_BTRFS_FS_POSIX_ACL=y
 CONFIG_F2FS_FS=m
 CONFIG_VFAT_FS=y
 CONFIG_FUSE_FS=y
-CONFIG_OVERLAY_FS=y
+CONFIG_OVERLAY_FS=m
 CONFIG_SQUASHFS=y
 CONFIG_SQUASHFS_XZ=y
 CONFIG_SQUASHFS_ZLIB=y
@@ -162,15 +164,23 @@ CONFIG_FANOTIFY_ACCESS_PERMISSIONS=y
 CONFIG_QUOTA=y
 
 # ============================================================================
-# GPU Intel Alder Lake (UHD Graphics GT1)
+# GPU — Intel (todas as gerações) + AMD + genérico
 # ============================================================================
 CONFIG_DRM=y
 CONFIG_DRM_SIMPLEDRM=y
 CONFIG_FB_EFI=y
 CONFIG_FB_VESA=y
-CONFIG_DRM_I915=y
+# Intel (GMA/HD/UHD/Arc) — módulo para cobrir qualquer geração
+CONFIG_DRM_I915=m
 CONFIG_DRM_I915_PXP=y
 CONFIG_DRM_I915_FORCE_PROBE="*"
+CONFIG_DRM_XE=m
+# AMD (GCN até RDNA) — módulo
+CONFIG_DRM_AMDGPU=m
+CONFIG_DRM_AMDGPU_SI=y
+CONFIG_DRM_AMDGPU_CIK=y
+CONFIG_DRM_RADEON=m
+# Genérico / fallback
 CONFIG_DRM_FBDEV_EMULATION=y
 CONFIG_FB=y
 CONFIG_FB_CFB_FILLRECT=y
@@ -182,7 +192,6 @@ CONFIG_FB_SYS_IMAGEBLIT=y
 CONFIG_FB_SYS_FOPS=y
 CONFIG_FB_DEFERRED_IO=y
 CONFIG_FB_MODE_HELPERS=y
-CONFIG_FB_I915=n
 
 # ============================================================================
 # GPU VirtIO (QEMU/KVM/Boxes) — essencial para testar a ISO live
@@ -200,7 +209,7 @@ CONFIG_DRM_VMWGFX=y
 CONFIG_DRM_VBOXVIDEO=m
 
 # ============================================================================
-# Áudio Intel HDA
+# Áudio — Intel HDA genérico (cobre Realtek, Conexant, IDT, HDMI, etc.)
 # ============================================================================
 CONFIG_SOUND=y
 CONFIG_SND=y
@@ -209,8 +218,17 @@ CONFIG_SND_HDA_HWDEP=y
 CONFIG_SND_HDA_RECONFIG=y
 CONFIG_SND_HDA_INPUT_BEEP=y
 CONFIG_SND_HDA_PATCH_LOADER=y
-CONFIG_SND_HDA_CODEC_REALTEK=y
-CONFIG_SND_HDA_CODEC_HDMI=y
+CONFIG_SND_HDA_CODEC_REALTEK=m
+CONFIG_SND_HDA_CODEC_ANALOG=m
+CONFIG_SND_HDA_CODEC_SIGMATEL=m
+CONFIG_SND_HDA_CODEC_VIA=m
+CONFIG_SND_HDA_CODEC_HDMI=m
+CONFIG_SND_HDA_CODEC_CONEXANT=m
+CONFIG_SND_HDA_CODEC_CA0110=m
+CONFIG_SND_HDA_CODEC_CA0132=m
+CONFIG_SND_HDA_CODEC_CIRRUS=m
+CONFIG_SND_HDA_CODEC_CMEDIA=m
+CONFIG_SND_HDA_CODEC_SI3054=m
 CONFIG_SND_SOC=y
 
 # ============================================================================
@@ -228,24 +246,49 @@ CONFIG_ATA=y
 CONFIG_SATA_AHCI=y
 
 # ============================================================================
-# WiFi MT7921 (MediaTek MT76)
+# WiFi — drivers comuns Intel + MediaTek + Realtek + Atheros
 # ============================================================================
 CONFIG_WLAN=y
 CONFIG_WIRELESS=y
 CONFIG_CFG80211=m
 CONFIG_MAC80211=m
-CONFIG_MT76=m
+# Intel (iwlwifi — cobre todas as gerações Wi-Fi 4/5/6/6E/7)
+CONFIG_IWLWIFI=m
+CONFIG_IWLDVM=m
+CONFIG_IWLMVM=m
+# MediaTek MT76 (MT7921, MT7922, MT7612, etc.)
 CONFIG_MT76_CORE=m
 CONFIG_MT76_USB=m
 CONFIG_MT7921E=m
 CONFIG_MT7921S=m
 CONFIG_MT7921U=m
+CONFIG_MT7615E=m
+CONFIG_MT76x2E=m
+# Realtek (RTL8821CE, RTL8822CE, RTL8852AE, etc.)
+CONFIG_RTL8821CE=m
+CONFIG_RTL8723BE=m
+# Atheros / Qualcomm (ath9k, ath10k, ath11k)
+CONFIG_ATH9K=m
+CONFIG_ATH10K=m
+CONFIG_ATH10K_PCI=m
+CONFIG_ATH11K=m
+CONFIG_ATH11K_PCI=m
 
 # ============================================================================
-# Ethernet RTL8111
+# Ethernet — vendors mais comuns
 # ============================================================================
 CONFIG_NET_VENDOR_REALTEK=y
-CONFIG_R8169=y
+CONFIG_R8169=m
+CONFIG_NET_VENDOR_INTEL=y
+CONFIG_E1000E=m
+CONFIG_IGB=m
+CONFIG_IGBVF=m
+CONFIG_IXGBE=m
+CONFIG_NET_VENDOR_BROADCOM=y
+CONFIG_BNX2=m
+CONFIG_TLAN=n
+CONFIG_NET_VENDOR_ATHEROS=y
+CONFIG_ATL1C=m
 
 # ============================================================================
 # USB 3.2 xHCI
@@ -286,6 +329,8 @@ CONFIG_IP_NF_IPTABLES=m
 CONFIG_IP_NF_FILTER=m
 CONFIG_IP_NF_NAT=m
 CONFIG_IP_NF_TARGET_MASQUERADE=m
+CONFIG_NETFILTER_XTABLES_LEGACY=m
+CONFIG_IP6_NF_IPTABLES_LEGACY=m
 CONFIG_IP6_NF_IPTABLES=m
 CONFIG_IP6_NF_FILTER=m
 CONFIG_IP6_NF_NAT=m
@@ -320,7 +365,6 @@ CONFIG_MEMCG=y
 # IO Scheduler
 # ============================================================================
 CONFIG_MQ_IOSCHED_KYBER=y
-CONFIG_MQ_IOSCHED_NONE=y
 CONFIG_BLK_CGROUP=y
 CONFIG_BLK_DEV_THROTTLING=y
 
@@ -340,7 +384,6 @@ CONFIG_BLK_DEV_INITRD=y
 CONFIG_INITRAMFS_SOURCE=""
 CONFIG_RD_GZIP=y
 CONFIG_RD_LZ4=y
-CONFIG_SWITCH_ROOT=y
 CONFIG_CMDLINE_BOOL=n
 
 # ============================================================================
@@ -371,7 +414,6 @@ CONFIG_INPUT_MISC=y
 CONFIG_VT=y
 CONFIG_VT_CONSOLE=y
 CONFIG_VT_HW_CONSOLE_BINDING=y
-CONFIG_HW_CONSOLE=y
 CONFIG_FRAMEBUFFER_CONSOLE=y
 
 # ============================================================================
@@ -396,8 +438,56 @@ CONFIG_SECTION_MISMATCH_WARN_ONLY=y
 CONFIG_FRAME_WARN=2048
 
 # ============================================================================
-# Kallsyms desligado (otimização)
+# Kallsyms — mantido y (kernel força default=y; desligar requer EXPERT=y
+# e quebra stack traces, não vale o ganho mínimo de tamanho)
 # ============================================================================
-CONFIG_KALLSYMS=n
+CONFIG_KALLSYMS=y
 CONFIG_KALLSYMS_ALL=n
 CONFIG_PRINTK_TIME=y
+
+# ============================================================================
+# Firmware — carregado em tempo de execução via /lib/firmware (genérico)
+# Não embutimos firmwares no kernel para manter o binário portável.
+# O sistema operacional host deve prover os firmwares via linux-firmware.
+# ============================================================================
+CONFIG_FIRMWARE_IN_KERNEL=n
+CONFIG_FW_LOADER_COMPRESS=y
+CONFIG_FW_LOADER_COMPRESS_ZSTD=y
+CONFIG_EXTRA_FIRMWARE_DIR="/lib/firmware"
+CONFIG_EXTRA_FIRMWARE=""
+
+# ============================================================================
+# Módulos ausentes (lp, ppdev, parport_pc, i2c_dev)
+# Corrige: systemd-modules-load "Failed to find module 'X'"
+# ============================================================================
+CONFIG_PRINTER=m
+CONFIG_PPDEV=m
+CONFIG_PARPORT=m
+CONFIG_PARPORT_PC=m
+CONFIG_I2C_CHARDEV=m
+
+# ============================================================================
+# SquashFS — suporte a LZO e Xattrs
+# Corrige: "lzo compression not supported" e "Xattrs will be ignored"
+# ============================================================================
+CONFIG_SQUASHFS_LZO=y
+CONFIG_SQUASHFS_XATTR=y
+
+# ============================================================================
+# BPF — desabilita eBPF não-privilegiado
+# Corrige: "Spectre V2: WARNING: Unprivileged eBPF is enabled with eIBRS"
+# ============================================================================
+CONFIG_BPF_UNPRIV_DEFAULT_OFF=y
+
+# ============================================================================
+# Bluetooth — stack genérico + vendors comuns
+# ============================================================================
+CONFIG_BT=m
+CONFIG_BT_HCIBTUSB=m
+CONFIG_BT_HCIBTUSB_MTK=y
+CONFIG_BT_MEDIATEK=m
+CONFIG_BT_INTEL=m
+CONFIG_BT_HCIUART=m
+CONFIG_BT_HCIUART_INTEL=y
+CONFIG_BT_HCIUART_QCA=y
+CONFIG_BT_QCA=m
